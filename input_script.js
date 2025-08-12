@@ -2,6 +2,9 @@ const express = require('express');
 const { exec } = require('child_process');
 
 const app = express();
+
+console.log('PORT from env:', process.env.PORT); // Лог переменной окружения PORT
+
 const PORT = process.env.PORT || 3000;
 
 app.get('/generate', (req, res) => {
