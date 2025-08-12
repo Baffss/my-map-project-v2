@@ -2,7 +2,7 @@ const express = require('express');
 const { exec } = require('child_process');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
 app.get('/generate', (req, res) => {
   const { lat, lon, radius } = req.query;
@@ -29,12 +29,11 @@ app.get('/generate', (req, res) => {
     }
     if (stderr) {
       console.error(`Error output: ${stderr}`);
-      // Можно решить, как обрабатывать stderr — сейчас просто логируем
     }
-    res.send(stdout); // Отправляем вывод generate_map.js клиенту
+    res.send(stdout);
   });
 });
 
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+app.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
 });
