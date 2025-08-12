@@ -3,9 +3,12 @@ const { exec } = require('child_process');
 
 const app = express();
 
-console.log('PORT from env:', process.env.PORT); // Лог переменной окружения PORT
-
+console.log('PORT from env:', process.env.PORT);
 const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+  res.send('Server is running');
+});
 
 app.get('/generate', (req, res) => {
   const { lat, lon, radius } = req.query;
