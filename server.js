@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 // Проверка, что сервер работает
 app.get('/', (req, res) => {
@@ -21,18 +21,26 @@ app.get('/generate', (req, res) => {
 
   const latitude = parseFloat(lat);
   const longitude = parseFloat(lon);
-  const radiusValue = parseInt(radius);
+  let radiusValue = parseInt(radius);
 
   if (isNaN(latitude) || isNaN(longitude) || isNaN(radiusValue)) {
     return res.status(400).send('Invalid lat, lon or radius');
   }
 
+  // Ограничение радиуса до 3000 для Render Free
+  if (radiusValue > 3000) radiusValue = 3000;
+
   console.log(`Processing with radius: ${radiusValue}`);
   console.log(`Starting map generation for ${latitude}, ${longitude}`);
 
-  const command = `node input_script.js "${latitude},${longitude},${radiusValue}"`;
+  const overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];(way["highway"](around:${radiusValue},${latitude},${longitude}););out geom;out body qt 30;`;
+  console.log("Overpass URL:", overpassUrl);
 
-  exec(command, (error, stdout, stderr) => {
+  fs.writeFileSync(path.join(__dirname, 'last_overpass_url.txt'), overpassUrl);
+
+  const command = `node generate_map.js "${latitude},${longitude},${radiusValue}" "My_Home"`;
+
+  exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
     if (error) {
       console.error(`Execution error: ${error.message}`);
       return res.status(500).send('Server error');
@@ -42,12 +50,11 @@ app.get('/generate', (req, res) => {
     }
 
     fs.writeFileSync(path.join(__dirname, 'last_stdout.txt'), stdout);
-
     res.send('Map generation started. Check server logs for details.');
   });
 });
 
-// Список всех файлов в папке
+// Список всех файлов
 app.get('/list-files', (req, res) => {
   fs.readdir(__dirname, (err, files) => {
     if (err) return res.status(500).send('Cannot read files');

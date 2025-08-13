@@ -7,9 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "start": "node input_script.js",
-    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore",
-    "start-script": "node input_script.js"
+    "start": "node server.js",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore"
   },
   "dependencies": {
     "canvas": "^3.1.2",
