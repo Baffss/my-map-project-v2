@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 10000; // Render автоматически назначает порт
+const PORT = process.env.PORT || 3000;
 
 // Проверка, что сервер работает
 app.get('/', (req, res) => {
@@ -42,6 +42,7 @@ app.get('/generate', (req, res) => {
     }
 
     fs.writeFileSync(path.join(__dirname, 'last_stdout.txt'), stdout);
+
     res.send('Map generation started. Check server logs for details.');
   });
 });
