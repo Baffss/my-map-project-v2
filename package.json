@@ -6,6 +6,7 @@
   },
   "dependencies": {
     "sharp": "^0.32.6",
-    "undici": "^5.28.2"
+    "undici": "^5.28.2",
+    "archiver": "^5.3.1"
   }
 }
