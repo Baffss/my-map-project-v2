@@ -7,11 +7,11 @@ function generateMap(orderData, name, markerType, customText) {
     const width = 400;
     const height = 300;
 
+    // Убираем текст, чтобы избежать зависимости от шрифтов
     const svg = `
         <svg width="${width}" height="${height}">
             <rect width="100%" height="100%" fill="white"/>
             <circle cx="${width/2}" cy="${height/2}" r="10" fill="red"/>
-            <text x="${width/2}" y="${height/2}" text-anchor="middle" fill="black">${customText}</text>
         </svg>
     `;
 
@@ -22,6 +22,7 @@ function generateMap(orderData, name, markerType, customText) {
         .toFile(outputPath, (err) => {
             if (err) {
                 console.error(`Error generating image: ${err.message}`);
+                process.exit(1);
                 return;
             }
             console.log(`Map saved as ${outputPath}`);
@@ -32,7 +33,7 @@ function generateMap(orderData, name, markerType, customText) {
 
             output.on('close', () => {
                 console.log(`ZIP saved as ${zipPath}`);
-                process.exit(0); // Явное завершение процесса
+                process.exit(0);
             });
             archive.pipe(output);
             archive.append(fs.createReadStream(outputPath), { name: 'map.jpg' });
