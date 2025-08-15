@@ -42,7 +42,6 @@ async function generateMap(orderData, name, markerType, customText) {
         .toFile(outputPath, (err) => {
             if (err) {
                 console.error(`Error generating image: ${err.message}`);
-                process.exit(1);
                 return;
             }
             console.log(`Map saved as ${outputPath}`);
