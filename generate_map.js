@@ -1,19 +1,39 @@
 const sharp = require('sharp');
 const fs = require('fs');
 const archiver = require('archiver');
+const undici = require('undici');
 
-function generateMap(orderData, name, markerType, customText) {
+async function generateMap(orderData, name, markerType, customText) {
     const [lat, lon, radius] = orderData.split(',').map(Number);
     const width = 400;
     const height = 300;
 
-    // Убираем текст, чтобы избежать зависимости от шрифтов
-    const svg = `
-        <svg width="${width}" height="${height}">
-            <rect width="100%" height="100%" fill="white"/>
-            <circle cx="${width/2}" cy="${height/2}" r="10" fill="red"/>
-        </svg>
-    `;
+    // Запрос к Overpass API с ограничением
+    const overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];(way["highway"](around:${radius},${lat},${lon}););out body;`;
+    const { body } = await undici.request(overpassUrl);
+    const data = await body.json();
+    const ways = data.elements;
+
+    // Простой SVG с дорогами
+    let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
+    svg += `<rect width="100%" height="100%" fill="white"/>`;
+    svg += `<circle cx="${width/2}" cy="${height/2}" r="10" fill="red"/>`; // Маркер
+
+    ways.forEach(way => {
+        if (way.nodes && way.nodes.length > 1) {
+            svg += `<polyline fill="none" stroke="black" stroke-width="1" points="`;
+            way.nodes.forEach((nodeId, index) => {
+                const node = data.elements.find(el => el.type === 'node' && el.id === nodeId);
+                if (node && index < 10) { // Ограничение до 10 точек для экономии памяти
+                    const x = (node.lon - lon + radius / 100000) * (width / (radius / 500));
+                    const y = (lat - node.lat + radius / 100000) * (height / (radius / 500));
+                    svg += `${x},${y} `;
+                }
+            });
+            svg += `"/>`;
+        }
+    });
+    svg += `</svg>`;
 
     const imageBuffer = Buffer.from(svg);
     const outputPath = `${name}_${Date.now()}_A1.jpg`;
@@ -43,7 +63,10 @@ function generateMap(orderData, name, markerType, customText) {
 
 const args = process.argv.slice(2);
 if (args.length === 4) {
-    generateMap(args[0], args[1], args[2], args[3]);
+    generateMap(args[0], args[1], args[2], args[3]).catch(err => {
+        console.error(`Error: ${err.message}`);
+        process.exit(1);
+    });
 } else {
     console.log('Usage: node generate_map.js "lat,lon,radius" name markerType customText');
     process.exit(1);
