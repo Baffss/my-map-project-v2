@@ -1,155 +1,44 @@
-const { fetch } = require('undici');
-const fs = require('fs');
 const sharp = require('sharp');
+const fs = require('fs');
+const archiver = require('archiver');
 
-// Функция для получения названия города
-async function getCityName(lat, lon) {
-    console.log(`Fetching city name for ${lat}, ${lon}...`);
-    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1&accept-language=en`);
-    const data = await response.json();
-    return data.address.city || data.address.town || data.address.village || 'Unknown Location';
-}
+function generateMap(orderData, name, markerType, customText) {
+    const [lat, lon, radius] = orderData.split(',').map(Number);
+    // Уменьшенное разрешение для экономии памяти
+    const width = 400; // Снизили с 800
+    const height = 300; // Снизили с 600
 
-// Функция для получения данных дорог
-async function getRoadsData(lat, lon, radius) {
-    console.log(`Fetching road data for ${lat}, ${lon} with radius ${radius}...`);
-    const query = `
-        [out:json];
-        (
-          way["highway"](around:${radius},${lat},${lon});
-        );
-        out geom; out body qt 30;
-    `;
-    console.log(`Overpass query: ${query}`);
-    const response = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: query,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
-    const data = await response.json();
-    console.log(`Received ${data.elements ? data.elements.length : 0} elements with radius ${radius}`);
-    if (data.elements && data.elements.length > 0) {
-        return data;
-    }
-    throw new Error(`No road data found for coordinates ${lat}, ${lon} with radius ${radius}`);
-}
-
-// Функция для генерации SVG
-function generateSVG(lat, lon, roads, cityName, radius, markerType = 'circle', customText = 'My home') {
-    console.log(`Generating SVG for ${cityName} with radius ${radius}...`);
-    const width = 7016;
-    const height = 9941;
-    const centerX = width / 2;
-    const centerY = height / 2;
-
-    const scale = width / (radius * 0.0000225);
-
-    let svgContent = `
-        <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">
-            <rect width="100%" height="100%" fill="#FFFFFF"/>
-            <rect x="0" y="0" width="${width}" height="${height}" fill="none" stroke="black" stroke-width="10"/>
+    const svg = `
+        <svg width="${width}" height="${height}">
+            <rect width="100%" height="100%" fill="white"/>
+            <circle cx="${width/2}" cy="${height/2}" r="10" fill="red"/>
+            <text x="${width/2}" y="${height/2}" text-anchor="middle" fill="black">${customText}</text>
+        </svg>
     `;
 
-    if (markerType === 'arrow') {
-        svgContent += `
-            <path d="M${centerX-25} ${centerY+35} L${centerX} ${centerY-25} L${centerX+25} ${centerY+35} L${centerX-15} ${centerY+35} L${centerX-15} ${centerY+55} L${centerX+15} ${centerY+55} L${centerX+15} ${centerY+35} Z" 
-                  fill="none" stroke="white" stroke-width="5"/>
-            <path d="M${centerX-20} ${centerY+30} L${centerX} ${centerY} L${centerX+20} ${centerY+30} L${centerX-10} ${centerY+30} L${centerX-10} ${centerY+50} L${centerX+10} ${centerY+50} L${centerX+10} ${centerY+30} Z" 
-                  fill="black"/>
-            <text x="${centerX}" y="${centerY+110}" font-size="40" fill="#000000" text-anchor="middle" font-weight="bold">${customText}</text>
-        `;
-    } else {
-        svgContent += `
-            <circle cx="${centerX}" cy="${centerY}" r="15" fill="black"/>
-            <circle cx="${centerX}" cy="${centerY}" r="20" fill="none" stroke="white" stroke-width="5"/>
-        `;
-    }
+    const imageBuffer = Buffer.from(svg);
+    const outputPath = `${name}_${Date.now()}_A1.jpg`;
+    sharp(imageBuffer)
+        .jpeg({ quality: 60 }) // Ещё большее сжатие
+        .toFile(outputPath, (err) => {
+            if (err) throw err;
+            console.log(`Map saved as ${outputPath}`);
 
-    roads.elements.forEach(road => {
-        if (road.type === 'way' && road.geometry) {
-            svgContent += '<path d="';
-            road.geometry.forEach((point, index) => {
-                const x = ((point.lon - lon) * scale + centerX);
-                const y = ((lat - point.lat) * scale + centerY);
-                if (index === 0) svgContent += `M${x},${y} `;
-                else svgContent += `L${x},${y} `;
-            });
-            svgContent += `" stroke="#333333" stroke-width="2" fill="none"/>\n`;
-        }
-    });
+            const archive = archiver('zip', { zlib: { level: 9 } });
+            const zipPath = `${name}_${Date.now()}.zip`;
+            const output = fs.createWriteStream(zipPath);
 
-    const textY = centerY + (height * 0.35);
-    svgContent += `<text x="${centerX}" y="${textY}" font-size="160" fill="#000000" text-anchor="middle">${cityName}</text>\n`;
-
-    svgContent += '</svg>';
-    return svgContent;
+            output.on('close', () => console.log(`ZIP saved as ${zipPath}`));
+            archive.pipe(output);
+            archive.append(fs.createReadStream(outputPath), { name: 'map.jpg' });
+            archive.finalize();
+        });
 }
 
-// Функция для конвертации SVG в JPEG
-async function convertToJPEG(svgContent, fileName, markerType) {
-    console.log(`Converting to different formats for ${fileName}...`);
-    const sizes = {
-        'A1': { width: 7016, height: 9941 },
-        'A2': { width: 4961, height: 7016 },
-        'A3': { width: 3508, height: 4961 }
-    };
-    const suffix = markerType === 'arrow' ? '_Arrow' : '';
-    for (const [format, size] of Object.entries(sizes)) {
-        try {
-            await sharp(Buffer.from(svgContent))
-                .resize(size.width, size.height)
-                .flatten({ background: { r: 255, g: 255, b: 255 } })
-                .jpeg({ quality: 95, chromaSubsampling: '4:4:4' })
-                .toFile(`${fileName}${suffix}_${format}.jpg`);
-            console.log(`Conversion completed for ${format}${suffix}: ${fileName}${suffix}_${format}.jpg`);
-        } catch (error) {
-            console.error(`Conversion error for ${format}${suffix}: ${error.message}`);
-            throw error;
-        }
-    }
-}
-
-// Основная функция обработки заказа
-async function generatePersonalMap(orderData, name, markerType = 'circle', customText = 'My home') {
-    const args = orderData.split(',');
-    if (args.length < 3) {
-        console.log('Invalid order data. Expected format: "latitude, longitude, radius"');
-        return;
-    }
-
-    const lat = parseFloat(args[0].trim());
-    const lon = parseFloat(args[1].trim());
-    const radius = parseInt(args[2].trim());
-    console.log(`Processing with radius: ${radius}`);
-    const fileName = name + '_' + Date.now();
-
-    if (isNaN(lat) || isNaN(lon) || isNaN(radius)) {
-        console.log('Invalid latitude, longitude, or radius.');
-        return;
-    }
-
-    try {
-        const cityName = await getCityName(lat, lon);
-        const roads = await getRoadsData(lat, lon, radius);
-        const svgContentCircle = generateSVG(lat, lon, roads, cityName, radius, 'circle');
-        fs.writeFileSync(`${fileName}_map.svg`, svgContentCircle);
-        await convertToJPEG(svgContentCircle, fileName, 'circle');
-
-        const svgContentArrow = generateSVG(lat, lon, roads, cityName, radius, 'arrow', customText);
-        await convertToJPEG(svgContentArrow, fileName, 'arrow');
-
-        console.log(`Map saved as ${fileName}_A1.jpg, ${fileName}_A2.jpg, ${fileName}_A3.jpg, ${fileName}_Arrow_A1.jpg, ${fileName}_Arrow_A2.jpg, ${fileName}_Arrow_A3.jpg`);
-        return `${fileName}_A1.jpg`;
-    } catch (error) {
-        console.error(`Error generating map: ${error.message}`);
-    }
-}
-
-// Точка входа
-if (process.argv.length >= 4) {
-    const orderData = process.argv[2];
-    const name = process.argv[3];
-    const markerType = process.argv[4] || 'circle';
-    const customText = process.argv[5] || 'My home';
-    generatePersonalMap(orderData, name, markerType, customText);
+// Вызов с параметрами
+const args = process.argv.slice(2);
+if (args.length === 4) {
+    generateMap(args[0], args[1], args[2], args[3]);
+} else {
+    console.log('Usage: node generate_map.js "lat,lon,radius" name markerType customText');
 }
