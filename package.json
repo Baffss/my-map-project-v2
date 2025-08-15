@@ -2,11 +2,11 @@
   "name": "my-map-project",
   "version": "1.0.0",
   "scripts": {
-  "start": "node input_script.js"
-}
+    "start": "node input_script.js"
+  },
   "dependencies": {
-    "sharp": "^0.32.6",
-    "undici": "^5.28.2",
+    "sharp": "^0.34.3",
+    "undici": "^7.13.0",
     "archiver": "^5.3.1"
   }
 }
