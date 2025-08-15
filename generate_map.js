@@ -4,9 +4,8 @@ const archiver = require('archiver');
 
 function generateMap(orderData, name, markerType, customText) {
     const [lat, lon, radius] = orderData.split(',').map(Number);
-    // Уменьшенное разрешение для экономии памяти
-    const width = 400; // Снизили с 800
-    const height = 300; // Снизили с 600
+    const width = 400;
+    const height = 300;
 
     const svg = `
         <svg width="${width}" height="${height}">
@@ -19,26 +18,32 @@ function generateMap(orderData, name, markerType, customText) {
     const imageBuffer = Buffer.from(svg);
     const outputPath = `${name}_${Date.now()}_A1.jpg`;
     sharp(imageBuffer)
-        .jpeg({ quality: 60 }) // Ещё большее сжатие
+        .jpeg({ quality: 60 })
         .toFile(outputPath, (err) => {
-            if (err) throw err;
+            if (err) {
+                console.error(`Error generating image: ${err.message}`);
+                return;
+            }
             console.log(`Map saved as ${outputPath}`);
 
             const archive = archiver('zip', { zlib: { level: 9 } });
             const zipPath = `${name}_${Date.now()}.zip`;
             const output = fs.createWriteStream(zipPath);
 
-            output.on('close', () => console.log(`ZIP saved as ${zipPath}`));
+            output.on('close', () => {
+                console.log(`ZIP saved as ${zipPath}`);
+                process.exit(0); // Явное завершение процесса
+            });
             archive.pipe(output);
             archive.append(fs.createReadStream(outputPath), { name: 'map.jpg' });
             archive.finalize();
         });
 }
 
-// Вызов с параметрами
 const args = process.argv.slice(2);
 if (args.length === 4) {
     generateMap(args[0], args[1], args[2], args[3]);
 } else {
     console.log('Usage: node generate_map.js "lat,lon,radius" name markerType customText');
+    process.exit(1);
 }
